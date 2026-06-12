@@ -4,49 +4,74 @@
 ![](https://img.shields.io/github/languages/code-size/HeidiSQL/HeidiSQL.svg?style=flat)
 
 # HeidiSQL
-HeidiSQL is a graphical interface for managing [MariaDB](http://www.mariadb.org/) or [MySQL](http://www.mysql.com/) servers, [Microsoft SQL databases](http://www.microsoft.com/sql/), [PostgreSQL](http://www.postgresql.org/), [SQLite](https://www.sqlite.org/), [Interbase](https://www.embarcadero.com/de/products/interbase) or [Firebird](https://firebirdsql.org/). "Heidi" lets you browse and edit data, create and edit tables, views, procedures, triggers and scheduled events. Also, you can export structure and data, either to SQL file, clipboard or to other servers. Read about [features](https://www.heidisql.com/#featurelist) or see some [screenshots](https://www.heidisql.com/screenshots.php). 
 
-### Need help?
-Look at [the online help page](https://www.heidisql.com/help.php) to learn how to use HeidiSQL. The [forum](https://www.heidisql.com/forum.php) is meant to ask questions. The [issue tracker](https://github.com/HeidiSQL/HeidiSQL/issues) is the place to report bugs or request new features.
+HeidiSQL 是一款图形化数据库管理工具，支持 [MariaDB](http://www.mariadb.org/)、[MySQL](http://www.mysql.com/)、[Microsoft SQL Server](http://www.microsoft.com/sql/)、[PostgreSQL](http://www.postgresql.org/)、[SQLite](https://www.sqlite.org/)、[Interbase](https://www.embarcadero.com/de/products/interbase) 和 [Firebird](https://firebirdsql.org/)。你可以浏览和编辑数据、管理表/视图/存储过程/触发器/计划事件，并将结构或数据导出到 SQL 文件、剪贴板或其他服务器。更多功能见[官网介绍](https://www.heidisql.com/#featurelist)，截图见[这里](https://www.heidisql.com/screenshots.php)。
 
-### Building
-For compiling on platforms other than Windows, look at the [`lazarus`](https://github.com/HeidiSQL/HeidiSQL/tree/lazarus) branch.
+本仓库为 [meta222888/HeidiSQL](https://github.com/meta222888/HeidiSQL) fork，在官方版本基础上包含以下针对 SQL Server 的修复与改进。
 
-Delphi 12.1 is required for building HeidiSQL for Windows. Older Delphi versions will most likely fail; newer Delphi versions may work or fail. Unfortunately, Lazarus or one 
-of the other free compilers cannot currently compile HeidiSQL.
+## 本 Fork 的修复
 
-Once Delphi is installed, you need to load the SynEdit project from the components folder. Build both run-time and design-time packages. Install the 
-design-time package. Do the same for the VirtualTree component project.
+### 修复 MSSQL 查询结果中文乱码
 
-Second you need install [madExcept](http://madshi.net/madCollection.exe).
+通过 ADO 连接 SQL Server 时，原先使用 `AsString` / `AsAnsiString` 读取字段，在 Windows 开启 UTF-8 区域设置、或 `VARCHAR` 列使用 GBK 等 DBCS 编码时，中文会显示为乱码。
 
-Third compile *.rc files:
+**修复方式：** 从底层 ADO Recordset 的 `OleVariant` 按类型解码——`varOleStr` 按 Unicode 处理，`varString` 使用系统 ANSI 代码页（如 CP936）转换；并正确区分 `NVARCHAR` / `VARCHAR` 等宽字符与窄字符字段类型。
 
-| folder | file | command |
+相关提交：`820c2654`
+
+### 修复 MSSQL (TCP/IP) 连接失败
+
+使用默认驱动 **MSOLEDBSQL** 时，连接字符串中的 `Network Library=DBMSSOCN` 会导致 OLE 报错：「参数类型不正确，或不在可以接受的范围之内，或与其他参数冲突」。
+
+**修复方式：** MSOLEDBSQL 不再附加 `Network Library` 参数（TCP 为默认协议）；旧版 SQLOLEDB 仍保留原有写法。
+
+相关提交：`ae524122`
+
+### SQL Server (TCP/IP) 默认端口 1433
+
+新建或切换到 **Microsoft SQL Server (TCP/IP)** 会话时，端口字段默认填入 **1433**（不再默认为 0）。
+
+## 需要帮助？
+
+- 使用说明：[在线帮助](https://www.heidisql.com/help.php)
+- 提问讨论：[官方论坛](https://www.heidisql.com/forum.php)
+- 缺陷反馈：[GitHub Issues](https://github.com/HeidiSQL/HeidiSQL/issues)
+
+## 编译
+
+非 Windows 平台请查看官方 [`lazarus`](https://github.com/HeidiSQL/HeidiSQL/tree/lazarus) 分支。
+
+Windows 版本需要 **Delphi 12.1** 或更高版本。较旧的 Delphi 大概率无法编译；Lazarus 等免费编译器目前也无法编译 HeidiSQL。
+
+1. 安装 Delphi 后，在 `components` 目录编译并安装 SynEdit、VirtualTreeView 的运行时与设计时包。
+2. 安装 [madExcept](http://madshi.net/madCollection.exe)。
+3. 编译资源文件（`*.rc`）：
+
+| 目录 | 文件 | 命令 |
 | ------ | ------ | ------ |
-|HeidiSQL/source/vcl-styles-utils |AwesomeFont.RC| brcc32 AwesomeFont.RC|
-|HeidiSQL/res| icon.rc | cgrc icon.rc |
-|HeidiSQL/res| icon-question.rc | brcc32 icon-question.rc |
-|HeidiSQL/res| version.rc | brcc32 version.rc |
-|HeidiSQL/res| manifest.rc | manifest.rc |
-|HeidiSQL/res| styles.rc | brcc32 styles.rc |
-|HeidiSQL/res| updater.rc | brcc32 updater.rc |
-> if updater.rc and updater.exe are not exists. you can copy them from updater64.rc and updater64.exe.
+| HeidiSQL/source/vcl-styles-utils | AwesomeFont.RC | brcc32 AwesomeFont.RC |
+| HeidiSQL/res | icon.rc | cgrc icon.rc |
+| HeidiSQL/res | icon-question.rc | brcc32 icon-question.rc |
+| HeidiSQL/res | version.rc | brcc32 version.rc |
+| HeidiSQL/res | manifest.rc | manifest.rc |
+| HeidiSQL/res | styles.rc | brcc32 styles.rc |
+| HeidiSQL/res | updater.rc | brcc32 updater.rc |
 
-Afterwards, load the HeidiSQL project from the packages folder.
+> 若 `updater.rc` 和 `updater.exe` 不存在，可从 `updater64.rc` 和 `updater64.exe` 复制。
 
-### Translation
-If you'd like to contribute by translating HeidiSQL into your mother tongue, you need to register at
-[Transifex](https://explore.transifex.com/heidisql/heidisql/), and join an existing language or request a
-new one.
+4. 打开 `packages` 目录下的 HeidiSQL 工程并编译，输出在 `out\heidisql.exe`。
 
-### Contributing to HeidiSQL
-* Pull requests will only be accepted for bugfixes. No new features please.
-* Please mention a ticket id in your pull request. If there is no ticket for that particular bug yet, go and create an issue request first, and fill out all fields of the issue template.
-* To become a developer member, ask Ansgar via email (see https://www.heidisql.com/imprint.php for email address)
+## 翻译贡献
 
-### Icons8 copyright
-Icons added in January 2019 into a `TImageCollection` component are copyright by [Icons8](https://icons8.com). Used with a special permission from Icons8 given to Ansgar for this project only. Do not copy them for anything else other than building HeidiSQL.
+如需参与界面翻译，请在 [Transifex](https://explore.transifex.com/heidisql/heidisql/) 注册并加入对应语言项目。
+
+## 向官方贡献
+
+- 官方仓库仅接受缺陷修复类 Pull Request，不接受新功能。
+- PR 中请附上对应的 issue 编号。
+
+## Icons8 版权
+
+2019 年 1 月加入 `TImageCollection` 的图标版权归 [Icons8](https://icons8.com) 所有，经 Ansgar 特别授权仅用于 HeidiSQL 项目，请勿挪作他用。
 
 [![Embarcadero logo.](https://www.heidisql.com/images/made-with-delphi.png)](https://www.embarcadero.com/de/case-study/heidisql-case-study)
-
