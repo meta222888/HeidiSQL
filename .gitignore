@@ -15,6 +15,7 @@
 __history
 __recovery
 *.mo
+!locale/**/*.mo
 *.po
 *.res
 out/Backups/*

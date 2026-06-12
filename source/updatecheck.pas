@@ -5,7 +5,7 @@ interface
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Classes, Vcl.Forms, Vcl.StdCtrls, System.IniFiles, Vcl.Controls, Vcl.Graphics,
   apphelpers, gnugettext, Vcl.ExtCtrls, extra_controls, System.StrUtils, Vcl.Dialogs,
-  Vcl.Menus, Vcl.Clipbrd, generic_types, System.DateUtils, System.IOUtils;
+  Vcl.Menus, Vcl.Clipbrd, generic_types, System.DateUtils, System.IOUtils, System.JSON;
 
 type
   TfrmUpdateCheck = class(TExtForm)
@@ -20,7 +20,6 @@ type
     btnChangelog: TButton;
     popupDownloadRelease: TPopupMenu;
     CopydownloadURL1: TMenuItem;
-    btnDonate: TButton;
     procedure FormCreate(Sender: TObject);
     procedure btnBuildClick(Sender: TObject);
     procedure LinkLabelReleaseLinkClick(Sender: TObject; const Link: string;
@@ -34,8 +33,9 @@ type
     SLinkInstructionsPortable = 'instructions-portable';
     SLinkChangelog = 'changelog';
   private
-    { Private declarations }
     BuildURL: String;
+    ReleaseDownloadURL: String;
+    ReleasePageURL: String;
     FLastStatusUpdate: Cardinal;
     FRestartTaskName: String;
     procedure Status(txt: String);
@@ -43,8 +43,10 @@ type
     function GetLinkUrl(Sender: TObject; LinkType: String): String;
     function GetTaskXmlFileContents: String;
     function AppDirIsWritable: Boolean;
+    function ParseReleaseTag(const Tag: String; out Major, Minor, Release, Revision: Word): Boolean;
+    function IsRemoteVersionNewer(Major, Minor, Release, Revision: Word): Boolean;
+    function PickReleaseAsset(Assets: TJSONArray): String;
   public
-    { Public declarations }
     BuildRevision: Integer;
     procedure ReadCheckFile;
   end;
@@ -62,17 +64,11 @@ uses main;
 
 
 
-{**
-  Set defaults
-}
 procedure TfrmUpdateCheck.FormCreate(Sender: TObject);
 begin
-  // Should be false by default. Callers can set this to True after Create()
-  btnDonate.OnClick := MainForm.DonateClick;
-  btnDonate.Visible := MainForm.HasDonated(False) = nbFalse;
-  btnDonate.Caption := f_('Donate to the %s project', [APPNAME]);
   HasSizeGrip := True;
   FRestartTaskName := 'yet_invalid';
+  groupBuild.Visible := False;
 end;
 
 procedure TfrmUpdateCheck.FormClose(Sender: TObject; var Action: TCloseAction);
@@ -84,19 +80,12 @@ begin
   end;
 end;
 
-{**
-  Update status text
-}
 procedure TfrmUpdateCheck.Status(txt: String);
 begin
   lblStatus.Caption := txt;
   lblStatus.Repaint;
 end;
 
-
-{**
-  Download check file
-}
 procedure TfrmUpdateCheck.FormShow(Sender: TObject);
 begin
   Width := AppSettings.ReadIntDpiAware(asUpdateCheckWindowWidth, Self);
@@ -106,16 +95,13 @@ begin
   try
     Status(_('Downloading check file')+' ...');
     ReadCheckFile;
-    // Developer versions probably have "unknown" (0) as revision,
-    // which makes it impossible to compare the revisions.
     if Mainform.AppVerRevision = 0 then
       Status(_('Error: Cannot determine current revision. Using a developer version?'))
-    else if Mainform.AppVerRevision = BuildRevision then
-      Status(f_('Your %s is up-to-date (no update available).', [APPNAME]))
-    else if groupRelease.Enabled or btnBuild.Enabled then
-      Status(_('Updates available.'));
+    else if groupRelease.Enabled then
+      Status(_('Updates available.'))
+    else
+      Status(f_('Your %s is up-to-date (no update available).', [APPNAME]));
   except
-    // Do not popup errors, just display them in the status label
     on E:Exception do
       Status(E.Message);
   end;
@@ -123,118 +109,164 @@ begin
   btnCancel.TrySetFocus;
 end;
 
+function TfrmUpdateCheck.ParseReleaseTag(const Tag: String; out Major, Minor, Release, Revision: Word): Boolean;
+var
+  S: String;
+  Parts: TArray<String>;
+begin
+  S := Trim(Tag);
+  if S.StartsWith('v', True) then
+    Delete(S, 1, 1);
+  Parts := S.Split(['.']);
+  Major := StrToIntDef(Parts[0], 0);
+  if Length(Parts) > 1 then Minor := StrToIntDef(Parts[1], 0) else Minor := 0;
+  if Length(Parts) > 2 then Release := StrToIntDef(Parts[2], 0) else Release := 0;
+  if Length(Parts) > 3 then Revision := StrToIntDef(Parts[3], 0) else Revision := 0;
+  Result := Major > 0;
+end;
 
-{**
-  Parse check file for updated version + release
-}
+function TfrmUpdateCheck.IsRemoteVersionNewer(Major, Minor, Release, Revision: Word): Boolean;
+var
+  Parts: TArray<String>;
+  LocalMajor, LocalMinor, LocalRelease, LocalRevision: Word;
+begin
+  Parts := Mainform.AppVersion.Split(['.']);
+  LocalMajor := StrToIntDef(Parts[0], 0);
+  LocalMinor := StrToIntDef(IfThen(Length(Parts) > 1, Parts[1], '0'), 0);
+  LocalRelease := StrToIntDef(IfThen(Length(Parts) > 2, Parts[2], '0'), 0);
+  LocalRevision := StrToIntDef(IfThen(Length(Parts) > 3, Parts[3], '0'), 0);
+  if Major <> LocalMajor then Exit(Major > LocalMajor);
+  if Minor <> LocalMinor then Exit(Minor > LocalMinor);
+  if Release <> LocalRelease then Exit(Release > LocalRelease);
+  Result := Revision > LocalRevision;
+end;
+
+function JsonString(AJson: TJSONObject; const AName, ADefault: String): String;
+var
+  V: TJSONValue;
+begin
+  V := AJson.GetValue(AName);
+  if V = nil then
+    Result := ADefault
+  else
+    Result := V.Value;
+end;
+
+function TfrmUpdateCheck.PickReleaseAsset(Assets: TJSONArray): String;
+var
+  i: Integer;
+  AssetName, NameLower: String;
+  BestPortable, BestInstaller: String;
+
+  function ScorePortable(const Name: String): Integer;
+  begin
+    Result := 0;
+    if Name.Contains('portable') then Inc(Result, 10);
+    if GetExecutableBits = 64 then begin
+      if Name.Contains('64') then Inc(Result, 5);
+    end else if Name.Contains('32') then
+      Inc(Result, 5);
+    if Name.EndsWith('.zip', True) then Inc(Result, 1);
+  end;
+
+begin
+  Result := '';
+  BestPortable := '';
+  BestInstaller := '';
+  for i := 0 to Assets.Count-1 do begin
+    AssetName := JsonString(Assets.Items[i] as TJSONObject, 'name', '');
+    NameLower := AssetName.ToLower;
+    if NameLower.Contains('portable') then begin
+      if (BestPortable = '') or (ScorePortable(NameLower) > ScorePortable(BestPortable.ToLower)) then
+        BestPortable := JsonString(Assets.Items[i] as TJSONObject, 'browser_download_url', '');
+    end else if NameLower.Contains('setup') and NameLower.EndsWith('.exe') then
+      BestInstaller := JsonString(Assets.Items[i] as TJSONObject, 'browser_download_url', '');
+  end;
+  if AppSettings.PortableMode then
+    Result := BestPortable
+  else
+    Result := BestInstaller;
+  if Result = '' then
+    Result := BestPortable;
+end;
+
 procedure TfrmUpdateCheck.ReadCheckFile;
 var
-  CheckfileDownload: THttpDownLoad;
-  CheckFilename, TaskXmlFile: String;
-  Ini: TIniFile;
-  ReleaseVersion, ReleasePackage: String;
-  ReleaseRevision: Integer;
-  Note: String;
-  Compiled: TDateTime;
-const
-  INISECT_RELEASE = 'Release';
-  INISECT_BUILD = 'Build';
+  CheckfileDownload: THttpDownload;
+  JsonText: String;
+  Json: TJSONObject;
+  Assets: TJSONArray;
+  Tag, ReleaseVersion, ReleaseDate, ReleaseNotes: String;
+  RemoteMajor, RemoteMinor, RemoteRelease, RemoteRevision: Word;
 begin
-  // Init GUI controls
   LinkLabelRelease.Enabled := False;
   btnBuild.Enabled := False;
+  groupRelease.Enabled := False;
   memoRelease.Clear;
   memoBuild.Clear;
+  ReleaseDownloadURL := '';
+  ReleasePageURL := APPGITHUB_RELEASES;
+  BuildRevision := Mainform.AppVerRevision;
 
-  // Prepare download
   CheckfileDownload := THttpDownload.Create(Self);
-  CheckfileDownload.TimeOut := 5;
-  CheckfileDownload.URL := APPDOMAIN+'updatecheck.php?r='+IntToStr(Mainform.AppVerRevision)+'&bits='+IntToStr(GetExecutableBits)+'&t='+DateTimeToStr(Now);
-  CheckFilename := GetTempDir + APPNAME + '_updatecheck.ini';
+  try
+    CheckfileDownload.TimeOut := 15;
+    CheckfileDownload.URL := 'https://api.github.com/repos/' + APPGITHUB_REPO + '/releases/latest';
+    CheckfileDownload.SendRequest('');
+    JsonText := CheckfileDownload.LastContent;
+  finally
+    CheckfileDownload.Free;
+  end;
 
-  // Download the check file
-  CheckfileDownload.SendRequest(CheckFilename);
-  // Remember when we did the updatecheck to enable the automatic interval
   AppSettings.WriteString(asUpdatecheckLastrun, DateTimeToStr(Now));
 
-  // Read [Release] section of check file
-  Ini := TIniFile.Create(CheckFilename);
-  if Ini.SectionExists(INISECT_RELEASE) then begin
-    ReleaseVersion := Ini.ReadString(INISECT_RELEASE, 'Version', 'unknown');
-    ReleaseRevision := Ini.ReadInteger(INISECT_RELEASE, 'Revision', 0);
-    ReleasePackage := IfThen(AppSettings.PortableMode, 'portable', 'installer');
-    memoRelease.Lines.Add(f_('Version %s (yours: %s)', [ReleaseVersion, Mainform.AppVersion]));
-    memoRelease.Lines.Add(f_('Released: %s', [Ini.ReadString(INISECT_RELEASE, 'Date', '')]));
-    if IsWine then
-      Note := _('Wine support is deprecated. Future versions will not work reliably. Use the native Linux or macOS releases instead.')
-    else
-      Note := Ini.ReadString(INISECT_RELEASE, 'Note', '');
-    if Note <> '' then
-      memoRelease.Lines.Add(_('Notes') + ': ' + Note);
+  Json := TJSONObject.ParseJSONValue(JsonText) as TJSONObject;
+  if Json = nil then
+    raise Exception.Create(_('Could not parse update information from GitHub.'));
+  try
+    Tag := JsonString(Json, 'tag_name', 'unknown');
+    ReleasePageURL := JsonString(Json, 'html_url', APPGITHUB_RELEASES);
+    ReleaseDate := JsonString(Json, 'published_at', '');
+    ReleaseNotes := JsonString(Json, 'body', '');
+    if not ParseReleaseTag(Tag, RemoteMajor, RemoteMinor, RemoteRelease, RemoteRevision) then
+      raise Exception.Create(_('Could not parse release version tag.'));
 
-    LinkLabelRelease.Caption := f_('Download version %s (%s)', [ReleaseVersion, ReleasePackage]);
-    LinkLabelRelease.Caption := '<a id="'+SLinkDownloadRelease+'">' + LinkLabelRelease.Caption + '</a>';
-    if AppSettings.PortableMode then begin
-      LinkLabelRelease.Caption := LinkLabelRelease.Caption + '   <a id="'+SLinkInstructionsPortable+'">'+_('Update instructions')+'</a>';
+    ReleaseVersion := Format('%d.%d.%d.%d', [RemoteMajor, RemoteMinor, RemoteRelease, RemoteRevision]);
+    memoRelease.Lines.Add(f_('Version %s (yours: %s)', [ReleaseVersion, Mainform.AppVersion]));
+    if ReleaseDate <> '' then
+      memoRelease.Lines.Add(f_('Released: %s', [Copy(ReleaseDate, 1, 10)]));
+    if ReleaseNotes <> '' then begin
+      memoRelease.Lines.Add(_('Notes') + ':');
+      memoRelease.Lines.Add(ReleaseNotes);
     end;
 
-    // Enable the download button if the current version is outdated
-    groupRelease.Enabled := ReleaseRevision > Mainform.AppVerRevision;
-    LinkLabelRelease.Enabled := groupRelease.Enabled;
+    Assets := Json.GetValue('assets') as TJSONArray;
+    if Assets <> nil then
+      ReleaseDownloadURL := PickReleaseAsset(Assets);
+
+    LinkLabelRelease.Caption := f_('Download version %s', [ReleaseVersion]);
+    LinkLabelRelease.Caption := '<a id="'+SLinkDownloadRelease+'">' + LinkLabelRelease.Caption + '</a>';
+    if AppSettings.PortableMode then
+      LinkLabelRelease.Caption := LinkLabelRelease.Caption + '   <a id="'+SLinkInstructionsPortable+'">'+_('Update instructions')+'</a>';
+
+    groupRelease.Enabled := IsRemoteVersionNewer(RemoteMajor, RemoteMinor, RemoteRelease, RemoteRevision)
+      and (ReleaseDownloadURL <> '');
+    LinkLabelRelease.Enabled := groupRelease.Enabled and (ReleaseDownloadURL <> '');
     memoRelease.Enabled := groupRelease.Enabled;
     if not memoRelease.Enabled then
       memoRelease.Font.Color := GetThemeColor(cl3DDkShadow)
     else
       memoRelease.Font.Color := GetThemeColor(clWindowText);
+  finally
+    Json.Free;
   end;
-
-  // Read [Build] section of check file
-  if Ini.SectionExists(INISECT_BUILD) then begin
-    BuildRevision := Ini.ReadInteger(INISECT_BUILD, 'Revision', 0);
-    BuildURL := Ini.ReadString(INISECT_BUILD, 'URL', '');
-    memoBuild.Lines.Add(f_('Revision %d (yours: %d)', [BuildRevision, Mainform.AppVerRevision]));
-    FileAge(ParamStr(0), Compiled);
-    memoBuild.Lines.Add(f_('Compiled: %s (yours: %s)', [Ini.ReadString(INISECT_BUILD, 'Date', ''), DateToStr(Compiled)]));
-    Note := Ini.ReadString(INISECT_BUILD, 'Note', '');
-    if Note <> '' then
-      memoBuild.Lines.Add(_('Notes') + ': * ' + StringReplace(Note, '%||%', CRLF+'* ', [rfReplaceAll] ) );
-    if GetExecutableBits = 64 then begin
-      btnBuild.Caption := f_('Download and install build %d', [BuildRevision]);
-      // A new release should have priority over a new nightly build.
-      // So the user should not be able to download a newer build here
-      // before having installed the new release.
-      btnBuild.Enabled := (Mainform.AppVerRevision = 0) or ((BuildRevision > Mainform.AppVerRevision) and (not LinkLabelRelease.Enabled));
-    end
-    else begin
-      btnBuild.Caption := _('No build updates for 32 bit version');
-    end;
-
-    if btnBuild.Enabled then begin
-      TaskXmlFile := GetTempDir + APPNAME + '_task_restart.xml';
-      SaveUnicodeFile(TaskXmlFile, GetTaskXmlFileContents, UTF8NoBOMEncoding);
-      FRestartTaskName := ValidFilename(ParamStr(0));
-      ShellExec('schtasks', '', '/Create /TN "'+FRestartTaskName+'" /xml '+TaskXmlFile, True);
-      btnBuild.ElevationRequired := not AppDirIsWritable;
-    end;
-
-  end;
-
-  if FileExists(CheckFilename) then
-    DeleteFile(CheckFilename);
-  FreeAndNil(CheckfileDownload);
 end;
 
-
-{**
-  Download release package via web browser
-}
 procedure TfrmUpdateCheck.LinkLabelReleaseLinkClick(Sender: TObject;
   const Link: string; LinkType: TSysLinkType);
 begin
   case LinkType of
-
     sltURL: ShellExec(Link);
-
     sltID: begin
       if Link = SLinkDownloadRelease then begin
         ShellExec(GetLinkUrl(Sender, Link));
@@ -244,25 +276,19 @@ begin
         MessageDialog(f_('Download the portable package and extract it in %s', [GetAppDir]), mtInformation, [mbOK]);
       end;
     end;
-
   end;
 end;
-
 
 procedure TfrmUpdateCheck.btnChangelogClick(Sender: TObject);
 begin
   ShellExec(GetLinkUrl(Sender, SLinkChangelog));
 end;
 
-
 procedure TfrmUpdateCheck.CopydownloadURL1Click(Sender: TObject);
 begin
   Clipboard.TryAsText := GetLinkUrl(LinkLabelRelease, SLinkDownloadRelease);
 end;
 
-{**
-  Download latest build and replace running exe
-}
 procedure TfrmUpdateCheck.btnBuildClick(Sender: TObject);
 var
   Download: THttpDownLoad;
@@ -278,26 +304,17 @@ begin
   Download := THttpDownload.Create(Self);
   Download.URL := BuildURL;
   ExeName := ExtractFileName(Application.ExeName);
-
-  // Save the file in a temp directory
   DownloadFilename := GetTempDir + ExeName;
   Download.OnProgress := DownloadProgress;
-
-  // Delete probably previously downloaded file
   if FileExists(DownloadFilename) then
     DeleteFile(DownloadFilename);
-
   try
-    // Do the download
     Download.SendRequest(DownloadFilename);
-
-    // Check if downloaded file exists
     if not FileExists(DownloadFilename) then
       Raise Exception.CreateFmt(_('Downloaded file not found: %s'), [DownloadFilename]);
     BuildSizeDownloaded := _GetFileSize(DownloadFilename);
     if BuildSizeDownloaded < SIZE_MB then
       Raise Exception.CreateFmt(_('Downloaded file corrupted: %s (Size is %d / too small)'), [DownloadFilename, BuildSizeDownloaded]);
-
     Status(_('Update in progress')+' ...');
     ResInfoblockHandle := FindResource(HInstance, 'UPDATER', 'EXE');
     ResHandle := LoadResource(HInstance, ResInfoblockHandle);
@@ -308,21 +325,14 @@ begin
         Stream.WriteBuffer(ResPointer[0], SizeOfResource(HInstance, ResInfoblockHandle));
         Stream.Position := 0;
         UpdaterFilename := GetTempDir + AppName+'_updater.exe';
-
         DoOverwrite := True;
         if FileExists(UpdaterFilename) and (Stream.Size = _GetFileSize(UpdaterFilename)) then begin
-          // Do not replace old updater if it's still valid. Avoids annoyance for cases in which
-          // user has whitelisted this .exe in his antivirus or whatever software.
           FileAge(UpdaterFilename, UpdaterAge);
           if Abs(DaysBetween(Now, UpdaterAge)) < 30 then
             DoOverwrite := False;
         end;
-
-        if DoOverwrite then begin
+        if DoOverwrite then
           Stream.SaveToFile(UpdaterFilename);
-        end;
-
-        // Calling the script will now post a WM_CLOSE this running exe...
         ShellExec(UpdaterFilename, '', '"'+ParamStr(0)+'" "'+DownloadFilename+'" "'+FRestartTaskName+'"');
       finally
         UnlockResource(ResHandle);
@@ -336,10 +346,6 @@ begin
   end;
 end;
 
-
-{**
-  Download progress event
-}
 procedure TfrmUpdateCheck.DownloadProgress(Sender: TObject);
 var
   Download: THttpDownload;
@@ -351,32 +357,15 @@ begin
   FLastStatusUpdate := GetTickCount;
 end;
 
-
 function TfrmUpdateCheck.GetLinkUrl(Sender: TObject; LinkType: String): String;
-var
-  DownloadParam, PlaceParam: String;
 begin
-  PlaceParam := 'place='+EncodeURLParam(TWinControl(Sender).Name);
-
-  if LinkType = SLinkDownloadRelease then begin
-    if AppSettings.PortableMode then begin
-      if GetExecutableBits = 64 then
-        DownloadParam := 'download=portable-64'
-      else
-        DownloadParam := 'download=portable';
-    end else begin
-      DownloadParam := 'download=installer';
-    end;
-    Result := 'download.php?'+DownloadParam+'&'+PlaceParam;
-  end
-
-  else if LinkType = SLinkChangelog then begin
-    Result := 'download.php?'+PlaceParam+'#nightlybuilds';
-  end;
-
-  Result := APPDOMAIN + Result;
+  if LinkType = SLinkDownloadRelease then
+    Result := ReleaseDownloadURL
+  else if LinkType = SLinkChangelog then
+    Result := ReleasePageURL
+  else
+    Result := APPGITHUB_RELEASES;
 end;
-
 
 function TfrmUpdateCheck.GetTaskXmlFileContents: String;
 begin
@@ -395,7 +384,6 @@ begin
     '  </Triggers>' + sLineBreak +
     '  <Principals>' + sLineBreak +
     '    <Principal id="Author">' + sLineBreak +
-    // Note: no <UserId> with the current users SID
     '      <LogonType>InteractiveToken</LogonType>' + sLineBreak +
     '      <RunLevel>LeastPrivilege</RunLevel>' + sLineBreak +
     '    </Principal>' + sLineBreak +
@@ -428,7 +416,6 @@ begin
     '</Task>';
 end;
 
-
 function TfrmUpdateCheck.AppDirIsWritable: Boolean;
 var
   TestFile: string;
@@ -443,11 +430,8 @@ begin
   DeleteFile(TestFile);
 end;
 
-
 procedure DeleteRestartTask;
 begin
-  // TN = Task Name
-  // F = Force, suppress prompt
   ShellExec('schtasks', '', '/Delete /TN "'+ValidFilename(ParamStr(0))+'" /F', True);
 end;
 

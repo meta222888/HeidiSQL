@@ -787,8 +787,6 @@ type
     menuCloseTabOnMiddleClick: TMenuItem;
     TimerCloseTabByButton: TTimer;
     menuTabsInMultipleLines: TMenuItem;
-    ToolBarDonate: TToolBar;
-    btnDonate: TToolButton;
     actResetPanelDimensions: TAction;
     popupApplyFilter: TPopupMenu;
     menuAlwaysGenerateFilter: TMenuItem;
@@ -1128,7 +1126,6 @@ type
     procedure menuClearDataTabFilterClick(Sender: TObject);
     procedure actUnixTimestampColumnExecute(Sender: TObject);
     procedure PopupQueryLoadPopup(Sender: TObject);
-    procedure DonateClick(Sender: TObject);
     procedure DBtreeExpanded(Sender: TBaseVirtualTree; Node: PVirtualNode);
     procedure ApplicationDeActivate(Sender: TObject);
     procedure ApplicationShowHint(var HintStr: string; var CanShow: Boolean; var HintInfo: THintInfo);
@@ -1272,7 +1269,6 @@ type
     FTimeZoneOffset: Integer;
     FGridCopying: Boolean;
     FGridPasting: Boolean;
-    FHasDonatedDatabaseCheck: TThreeStateBoolean;
     FFocusedTables: TDBObjectList;
     FLastCaptionChange: Cardinal;
     FListTablesSorted: Boolean;
@@ -1410,7 +1406,6 @@ type
     procedure ProgressStep;
     procedure SetProgressState(State: TProgressbarState);
     procedure TaskDialogHyperLinkClicked(Sender: TObject);
-    function HasDonated(ForceCheck: Boolean): TThreeStateBoolean;
     procedure ApplyVTFilter(FromTimer: Boolean);
     procedure ApplyFontToGrids;
     procedure PrepareImageList;
@@ -2267,9 +2262,6 @@ begin
   SessionPaths := TStringList.Create;
   AppSettings.GetSessionPaths('', SessionPaths);
 
-  // Hide PayPal donate toolbar in this fork
-  ToolBarDonate.Visible := False;
-
   // Call user statistics if checked in settings
   if AppSettings.ReadBool(asDoUsageStatistics) then begin
     LastStatsCall := StrToDateTimeDef(AppSettings.ReadString(asLastUsageStatisticCall), DateTimeNever);
@@ -2313,9 +2305,6 @@ begin
   // Delete scheduled task from previous
   if RunFrom = 'scheduler' then begin
     DeleteRestartTask;
-    if HasDonated(False) <> nbTrue then begin
-      apphelpers.ShellExec(APPDOMAIN + 'after-updatecheck?rev=' + AppVerRevision.ToString);
-    end;
   end;
 
   if ConnectionParams <> nil then begin
@@ -3148,26 +3137,6 @@ procedure TMainForm.actWebbrowse(Sender: TObject);
 begin
   // Browse to URL (hint)
   ShellExec( TAction(Sender).Hint );
-end;
-
-
-procedure TMainForm.DonateClick(Sender: TObject);
-var
-  Dialog: TWinControl;
-  place: String;
-begin
-  // Click on one of the various donate buttons
-  if Sender is TWinControl then begin
-    Dialog := GetParentFormOrFrame(TWinControl(Sender));
-  end else begin
-    Dialog := Self;
-  end;
-  if Dialog = nil then
-    ErrorDialog(f_('Could not determine parent form of this %s', [Sender.ClassName]))
-  else begin
-    place := LowerCase(Dialog.UnitName);
-    ShellExec(APPDOMAIN + 'donatebutton.php?place=' + EncodeURLParam(place));
-  end;
 end;
 
 
@@ -15202,53 +15171,6 @@ begin
   // Used by hyperlinks in helpers.MessageDialog()
   if Sender is TTaskDialog then
     ShellExec(TTaskDialog(Sender).URL);
-end;
-
-
-function TMainForm.HasDonated(ForceCheck: Boolean): TThreeStateBoolean;
-var
-  Email, CheckResult: String;
-  rx: TRegExpr;
-  CheckWebpage: THttpDownload;
-begin
-  Screen.Cursor := crHourGlass;
-  if (FHasDonatedDatabaseCheck = nbUnset) or (ForceCheck) then begin
-    Email := AppSettings.ReadString(asDonatedEmail);
-    if Email = '' then begin
-      // Nothing to check, we know this is not valid
-      FHasDonatedDatabaseCheck := nbFalse;
-    end else begin
-      // Check heidisql.com/hasdonated.php?email=...
-      // FHasDonatedDatabaseCheck
-      //   = 0 : No check yet done
-      //   = 1 : Not a donor
-      //   = 2 : Valid donor
-      rx := TRegExpr.Create;
-      CheckWebpage := THttpDownload.Create(MainForm);
-      CheckWebpage.URL := APPDOMAIN + 'hasdonated.php?email='+EncodeURLParam(Email);
-      try
-        CheckWebpage.SendRequest('');
-        CheckResult := CheckWebpage.LastContent;
-        LogSQL('HTTP response: "'+CheckResult+'"', lcDebug);
-        rx.Expression := '^\d';
-        if rx.Exec(CheckResult) then begin
-          if CheckResult = '0' then
-            FHasDonatedDatabaseCheck := nbFalse
-          else
-            FHasDonatedDatabaseCheck := nbTrue;
-        end;
-      except
-        on E:Exception do begin
-          LogSQL(E.Message + sLineBreak + 'HTTP response: "'+CheckResult+'"', lcError);
-          FHasDonatedDatabaseCheck := nbUnset; // Could have been set before, when ForceCheck=true
-        end;
-      end;
-      CheckWebpage.Free;
-      rx.Free;
-    end;
-  end;
-  Result := FHasDonatedDatabaseCheck;
-  Screen.Cursor := crDefault;
 end;
 
 

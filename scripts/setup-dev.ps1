@@ -54,11 +54,15 @@ if ($runtimeSrc) {
         Get-ChildItem -Path $runtimeSrc -Filter $pat -File -ErrorAction SilentlyContinue |
             Copy-Item -Destination $OutDir -Force
     }
-    foreach ($sub in @('plugins', 'plugins64', 'locale', 'Snippets')) {
+    foreach ($sub in @('plugins', 'plugins64', 'Snippets')) {
         $src = Join-Path $runtimeSrc $sub
         if (Test-Path $src) {
             Copy-Item -Path $src -Destination (Join-Path $OutDir $sub) -Recurse -Force
         }
+    }
+    $repoLocale = Join-Path $RepoRoot 'locale'
+    if (Test-Path $repoLocale) {
+        Copy-Item -Path $repoLocale -Destination (Join-Path $OutDir 'locale') -Recurse -Force
     }
     Write-Host 'Runtime files synced.' -ForegroundColor Green
 } else {
@@ -86,6 +90,13 @@ if (-not $MadDir) {
     Write-Host 'madCollection tools are installed, but Delphi 12.3 packages are missing.' -ForegroundColor Yellow
     Write-Host '  Re-run the madCollection installer, enable "Delphi 12 Alexandria" / BDS 23, then compile madExcept*.dpk in the IDE.' -ForegroundColor Gray
     Write-Host '  Until then, build uses source\madexcept-stub (no crash reports).' -ForegroundColor Gray
+}
+
+Write-Host ''
+if (-not (Test-Path (Join-Path $RepoRoot 'locale\zh_CN\LC_MESSAGES\default.mo'))) {
+    Write-Host ''
+    Write-Host 'Downloading official translation files...' -ForegroundColor Yellow
+    & (Join-Path $PSScriptRoot 'sync-locale.ps1')
 }
 
 Write-Host ''

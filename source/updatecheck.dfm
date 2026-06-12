@@ -45,7 +45,8 @@ object frmUpdateCheck: TfrmUpdateCheck
   end
   object groupBuild: TGroupBox
     Left = 8
-    Top = 192
+    Top = 112
+    Visible = False
     Width = 344
     Height = 172
     Anchors = [akLeft, akTop, akRight, akBottom]
@@ -136,19 +137,6 @@ object frmUpdateCheck: TfrmUpdateCheck
       UseVisualStyle = True
       OnLinkClick = LinkLabelReleaseLinkClick
     end
-  end
-  object btnDonate: TButton
-    Left = 8
-    Top = 8
-    Width = 344
-    Height = 74
-    Anchors = [akLeft, akTop, akRight]
-    Caption = 'Donate'
-    CommandLinkHint = 
-      'Send an arbitrary amount as donation to the author - per PayPal ' +
-      '(also supports credit cards)'
-    Style = bsCommandLink
-    TabOrder = 0
   end
   object popupDownloadRelease: TPopupMenu
     Images = MainForm.VirtualImageListMain

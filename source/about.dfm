@@ -262,13 +262,6 @@ object AboutBox: TAboutBox
     Transparent = True
     OnClick = OpenURL
   end
-  object lblDonated: TLabel
-    Left = 117
-    Top = 171
-    Width = 238
-    Height = 14
-    Caption = 'I have donated per following email address:'
-  end
   object lblEnvironment: TLabel
     Left = 117
     Top = 83
@@ -299,7 +292,7 @@ object AboutBox: TAboutBox
   end
   object btnClose: TButton
     Left = 353
-    Top = 338
+    Top = 218
     Width = 100
     Height = 25
     Anchors = [akRight, akBottom]
@@ -311,48 +304,13 @@ object AboutBox: TAboutBox
   end
   object btnUpdateCheck: TButton
     Left = 117
-    Top = 338
+    Top = 218
     Width = 230
     Height = 25
     Action = MainForm.actUpdateCheck
     Anchors = [akLeft, akRight, akBottom]
     Images = MainForm.VirtualImageListMain
     TabOrder = 5
-  end
-  object editDonated: TEdit
-    Left = 117
-    Top = 190
-    Width = 180
-    Height = 22
-    TabOrder = 2
-    TextHint = 'Email address'
-    OnEnter = editDonatedEnter
-    OnExit = editDonatedExit
-  end
-  object btnDonatedOK: TButton
-    Left = 303
-    Top = 189
-    Width = 64
-    Height = 25
-    Caption = 'OK'
-    TabOrder = 3
-    OnClick = btnDonatedOKClick
-  end
-  object btnDonate: TButton
-    Left = 117
-    Top = 218
-    Width = 336
-    Height = 74
-    Hint = 
-      'Send an arbitrary amount as donation to the author - per PayPal ' +
-      '(also supports credit cards)'
-    Anchors = [akLeft, akTop, akRight]
-    Caption = 'Donate'
-    CommandLinkHint = 
-      'Send an arbitrary amount as donation to the author - per PayPal ' +
-      '(also supports credit cards)'
-    Style = bsCommandLink
-    TabOrder = 4
   end
   object lnklblCompiler: TLinkLabel
     Left = 246

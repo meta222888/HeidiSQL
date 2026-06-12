@@ -1775,34 +1775,6 @@ object MainForm: TMainForm
         Action = actCancelOperation
       end
     end
-    object ToolBarDonate: TToolBar
-      Left = 863
-      Top = 2
-      Width = 67
-      Height = 22
-      Align = alNone
-      AutoSize = True
-      ButtonWidth = 67
-      Caption = 'Donate'
-      EdgeInner = esNone
-      EdgeOuter = esNone
-      Images = VirtualImageListMain
-      List = True
-      ShowCaptions = True
-      TabOrder = 1
-      Visible = False
-      Wrapable = False
-      object btnDonate: TToolButton
-        Left = 0
-        Top = 0
-        Hint = 
-          'Send an arbitrary amount as donation to the author - per PayPal ' +
-          '(also supports credit cards)'
-        Caption = 'Donate'
-        ImageIndex = 185
-        OnClick = DonateClick
-      end
-    end
   end
   object MainMenu1: TMainMenu
     AutoHotkeys = maManual
@@ -2636,7 +2608,7 @@ object MainForm: TMainForm
     object actWebDownloadpage: TAction
       Category = 'Various'
       Caption = 'Download page'
-      Hint = 'http://www.heidisql.com/download.php'
+      Hint = 'https://github.com/meta222888/HeidiSQL/releases'
       ImageIndex = 69
       ImageName = 'icons8-internet'
       OnExecute = actWebbrowse
@@ -2644,7 +2616,7 @@ object MainForm: TMainForm
     object actWebForum: TAction
       Category = 'Various'
       Caption = 'Support forum'
-      Hint = 'http://www.heidisql.com/forum.php'
+      Hint = 'https://pc530.com/forum/'
       ImageIndex = 95
       ImageName = 'icons8-collaboration'
       OnExecute = actWebbrowse
@@ -2652,7 +2624,7 @@ object MainForm: TMainForm
     object actWebChangelog: TAction
       Category = 'Various'
       Caption = 'Changelog'
-      Hint = 'https://github.com/HeidiSQL/HeidiSQL/commits/master'
+      Hint = 'https://github.com/meta222888/HeidiSQL/releases'
       ImageIndex = 68
       ImageName = 'icons8-brief'
       OnExecute = actWebbrowse

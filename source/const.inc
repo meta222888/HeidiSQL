@@ -13,7 +13,10 @@ const
 
   // General things
   APPNAME = 'HeidiSQL';
-  APPDOMAIN = 'https://www.heidisql.com/';
+  APPDOMAIN = 'https://pc530.com/';
+  APPFORUM = 'https://pc530.com/forum/';
+  APPGITHUB_REPO = 'meta222888/HeidiSQL';
+  APPGITHUB_RELEASES = 'https://github.com/meta222888/HeidiSQL/releases';
   REGKEY_SESSIONS = 'Servers';
   REGKEY_QUERYHISTORY = 'QueryHistory';
   REGKEY_RECENTFILTERS = 'RecentFilters';
