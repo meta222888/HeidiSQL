@@ -3047,7 +3047,7 @@ begin
         RawPassword := AnsiString(Parameters.Password);
         FLib.sqlite3_key(FHandle, Pointer(RawPassword), Length(RawPassword));
         // See https://utelle.github.io/SQLite3MultipleCiphers/docs/configuration/config_capi/
-        // "These functions return SQLITE_OK even if the provided key isn’t correct. This is because the key isn’t
+        // "These functions return SQLITE_OK even if the provided key isn?t correct. This is because the key isn?t
         // actually used until a subsequent attempt to read or write the database is made. To check whether the
         // provided key was actually correct, you must execute a simple query like e.g. SELECT * FROM sqlite_master;
         // and check whether that succeeds."
@@ -8327,11 +8327,17 @@ begin
             TypeIndex := dbdtBigInt;
           ftBCD, ftFMTBcd:
             TypeIndex := dbdtDecimal;
-          ftFixedChar, ftFixedWideChar:
+          ftFixedWideChar:
+            TypeIndex := dbdtNchar;
+          ftFixedChar:
             TypeIndex := dbdtChar;
-          ftString, ftWideString, ftBoolean, ftGuid:
+          ftWideString:
+            TypeIndex := dbdtNvarchar;
+          ftString, ftBoolean, ftGuid:
             TypeIndex := dbdtVarchar;
-          ftMemo, ftWideMemo:
+          ftWideMemo:
+            TypeIndex := dbdtNtext;
+          ftMemo:
             TypeIndex := dbdtText;
           ftBlob, ftVariant:
             TypeIndex := dbdtMediumBlob;
@@ -9019,23 +9025,69 @@ begin
 end;
 
 
+function AdoVariantToString(const V: OleVariant): String;
+var
+  VarT: Word;
+  AnsiStr: AnsiString;
+  WideLen: Integer;
+  CodePage: UINT;
+begin
+  if VarIsNull(V) or VarIsEmpty(V) then begin
+    Result := '';
+    Exit;
+  end;
+  VarT := VarType(V);
+  case VarT of
+    varOleStr:
+      Result := WideString(V);
+    varString:
+      begin
+        AnsiStr := AnsiString(V);
+        if Length(AnsiStr) = 0 then
+          Result := ''
+        else begin
+          // Use the active ANSI code page. TEncoding.Default may be UTF-8 on Windows 10+,
+          // which breaks SQL Server VARCHAR data stored in a DBCS code page (e.g. GBK).
+          CodePage := GetACP;
+          WideLen := MultiByteToWideChar(CodePage, 0, PAnsiChar(AnsiStr), Length(AnsiStr), nil, 0);
+          SetLength(Result, WideLen);
+          if WideLen > 0 then
+            MultiByteToWideChar(CodePage, 0, PAnsiChar(AnsiStr), Length(AnsiStr), PWideChar(Result), WideLen);
+        end;
+      end;
+  else
+    Result := VarToStr(V);
+  end;
+end;
+
+
+function AdoFieldValueToString(Field: TField; AdoQuery: TAdoQuery): String;
+var
+  V: OleVariant;
+begin
+  if (AdoQuery <> nil) and (AdoQuery.Recordset <> nil) then begin
+    V := AdoQuery.Recordset.Fields[Field.Index].Value;
+    Result := AdoVariantToString(V);
+  end else if Field.DataType in [ftWideString, ftWideMemo, ftFixedWideChar] then
+    Result := Field.AsWideString
+  else
+    Result := AdoVariantToString(Field.Value);
+end;
+
+
 function TAdoDBQuery.Col(Column: Integer; IgnoreErrors: Boolean=False): String;
 begin
   if ColumnExists(Column) then begin
     if FEditingPrepared and Assigned(FCurrentUpdateRow) then begin
       Result := FCurrentUpdateRow[Column].NewText;
     end else begin
-      try
-        case Datatype(Column).Category of
-          dtcReal:
-            Result := FloatToStr(FCurrentResults.Fields[Column].AsExtended, FFormatSettings);
-          dtcTemporal:
-            Result := FormatDateTime(Datatype(Column).Format, FCurrentResults.Fields[Column].AsFloat);
-          else
-            Result := FCurrentResults.Fields[Column].AsString;
-        end;
-      except
-        Result := String(FCurrentResults.Fields[Column].AsAnsiString);
+      case Datatype(Column).Category of
+        dtcReal:
+          Result := FloatToStr(FCurrentResults.Fields[Column].AsExtended, FFormatSettings);
+        dtcTemporal:
+          Result := FormatDateTime(Datatype(Column).Format, FCurrentResults.Fields[Column].AsFloat);
+        else
+          Result := AdoFieldValueToString(FCurrentResults.Fields[Column], FCurrentResults);
       end;
     end;
     if Datatype(Column).Index = dbdtBit then begin
