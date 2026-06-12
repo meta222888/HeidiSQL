@@ -19,6 +19,7 @@ $DelphiBin = Get-HeidiDelphiBin -RepoRoot $RepoRoot
 $DelphiRoot = Get-HeidiDelphiRoot -DelphiBin $DelphiBin
 $MadDir = Get-HeidiMadDir
 if (-not $MadDir) { $MadDir = 'C:\Program Files (x86)\madCollection' }
+$MadPackages = Test-HeidiMadExceptPackages -MadDir $MadDir -Platform $Platform
 
 & (Join-Path $RepoRoot 'scripts\setup-dev.ps1') | Out-Null
 & (Join-Path $RepoRoot 'scripts\compile-resources.ps1')
@@ -33,16 +34,21 @@ $madPaths = @(
     (Join-Path $MadDir "madBasic\BDS23\win$Bit")
 ) -join ';'
 
-$unitPaths = @(
-    (Join-Path $RepoRoot 'source\madexcept-stub'),
+$unitPathList = @(
     (Join-Path $RepoRoot 'components\synedit\source'),
     (Join-Path $RepoRoot 'components\virtualtreeview\source'),
     (Join-Path $RepoRoot 'source\detours\Source'),
     (Join-Path $RepoRoot 'source\vcl-styles-utils'),
-    (Join-Path $RepoRoot 'source\sizegrip'),
-    $madPaths,
-    $lib
-) -join ';'
+    (Join-Path $RepoRoot 'source\sizegrip')
+)
+if (-not $MadPackages) {
+    $unitPathList = @( (Join-Path $RepoRoot 'source\madexcept-stub') ) + $unitPathList
+}
+if ($MadPackages) {
+    $unitPathList += $madPaths
+}
+$unitPathList += $lib
+$unitPaths = $unitPathList -join ';'
 
 $resourcePaths = @(
     (Join-Path $RepoRoot 'components\synedit\Source'),

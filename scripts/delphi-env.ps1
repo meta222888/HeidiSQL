@@ -42,6 +42,15 @@ function Get-HeidiMadDir {
     return $null
 }
 
+function Test-HeidiMadExceptPackages {
+    param([string]$MadDir, [string]$Platform = 'Win64')
+    if (-not $MadDir) { return $false }
+    $bit = if ($Platform -eq 'Win64') { '64' } else { '32' }
+    $pas = Join-Path $MadDir 'madExcept\madExcept.pas'
+    $dcu = Join-Path $MadDir "madExcept\BDS23\win$bit\madExcept.dcu"
+    return (Test-Path $pas) -or (Test-Path $dcu)
+}
+
 function Ensure-HeidiDelphiRsVars {
     param(
         [string]$RepoRoot,

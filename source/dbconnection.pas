@@ -2756,7 +2756,8 @@ begin
       ConnStr := ConnStr + 'Network Library='+NetLib+';';
     ConnStr := ConnStr + 'Data Source='+DataSource+';'+
       'Application Name='+AppName+';'+
-      'Locale Identifier='+IntToStr(GetUserDefaultLCID)+';';
+      'Locale Identifier='+IntToStr(GetUserDefaultLCID)+';'+
+      'Auto Translate=False;';
     FAdoHandle.ConnectionString := ConnStr;
     if IsOleDbDriver then begin
       // Issue #423: MSOLEDBSQL compatibility with new column types
@@ -9079,9 +9080,23 @@ begin
 end;
 
 
-function AdoVariantToString(const V: OleVariant): String;
+function FixAdoMisdecodedNarrowOleStr(const WrongUnicode: String): String;
+var
+  RawBytes: AnsiString;
+begin
+  // When the "Beta: UTF-8 for worldwide language support" option is on, ADO/SQLOLEDB
+  // decodes DBCS VARCHAR bytes as UTF-8 into BSTR. Recover original bytes and decode
+  // with the locale ANSI code page (e.g. GBK 936 for zh-CN).
+  RawBytes := UTF8Encode(WrongUnicode);
+  if not TryDecodeUtf8(RawBytes, Result) then
+    Result := AnsiToUnicode(RawBytes, LocaleAnsiCodePage);
+end;
+
+
+function AdoVariantToString(const V: OleVariant; IsNarrowText: Boolean): String;
 var
   VarT: Word;
+  S: String;
 begin
   if VarIsNull(V) or VarIsEmpty(V) then begin
     Result := '';
@@ -9090,7 +9105,13 @@ begin
   VarT := VarType(V) and varTypeMask;
   case VarT of
     varOleStr, varUString:
-      Result := String(V);
+      begin
+        S := String(V);
+        if IsNarrowText and (GetACP = 65001) then
+          Result := FixAdoMisdecodedNarrowOleStr(S)
+        else
+          Result := S;
+      end;
     varString:
       Result := AnsiToUnicodeAuto(AnsiString(V));
   else
@@ -9102,6 +9123,7 @@ end;
 function AdoFieldValueToString(Field: TField; AdoQuery: TAdoQuery): String;
 var
   V: OleVariant;
+  IsNarrowText: Boolean;
 begin
   if Field.IsNull then begin
     Result := '';
@@ -9111,11 +9133,12 @@ begin
     Result := Field.AsWideString;
     Exit;
   end;
+  IsNarrowText := Field.DataType in [ftString, ftMemo, ftFixedChar];
   if (AdoQuery <> nil) and (AdoQuery.Recordset <> nil) then
     V := AdoQuery.Recordset.Fields[Field.Index].Value
   else
     V := Field.Value;
-  Result := AdoVariantToString(V);
+  Result := AdoVariantToString(V, IsNarrowText);
 end;
 
 

@@ -26,12 +26,14 @@ Write-Host ''
 $DelphiBin = Get-HeidiDelphiBin -RepoRoot $RepoRoot
 $DelphiRoot = if ($DelphiBin) { Get-HeidiDelphiRoot -DelphiBin $DelphiBin } else { $null }
 $MadDir = Get-HeidiMadDir
+$MadPackages = Test-HeidiMadExceptPackages -MadDir $MadDir -Platform 'Win64'
 $hasBrcc = $DelphiBin -and (Test-Path (Join-Path $DelphiBin 'brcc32.exe'))
 $hasInstalled = Test-Path (Join-Path $InstalledDir 'heidisql.exe')
 $hasPortable = Test-Path (Join-Path $PortableDir 'heidisql.exe')
 
 Write-Status -Label "Delphi: $(if ($DelphiRoot) { $DelphiRoot } else { 'not found' })" -Ok ($null -ne $DelphiBin)
-Write-Status -Label "madExcept: $(if ($MadDir) { $MadDir } else { 'not found' })" -Ok ($null -ne $MadDir)
+Write-Status -Label "madCollection: $(if ($MadDir) { $MadDir } else { 'not found' })" -Ok ($null -ne $MadDir)
+Write-Status -Label 'madExcept Delphi packages (BDS23)' -Ok $MadPackages
 Write-Status -Label 'brcc32' -Ok $hasBrcc
 Write-Status -Label "Portable HeidiSQL: $PortableDir" -Ok $hasPortable
 Write-Status -Label "Installed HeidiSQL: $InstalledDir" -Ok $hasInstalled
@@ -78,7 +80,12 @@ Write-Host "Generated scripts\rsvars-local.bat for: $DelphiRoot" -ForegroundColo
 
 if (-not $MadDir) {
     Write-Host ''
-    Write-Host 'madExcept not found; build will use source\madexcept-stub (dev builds only).' -ForegroundColor Yellow
+    Write-Host 'madCollection not found; build will use source\madexcept-stub.' -ForegroundColor Yellow
+} elseif (-not $MadPackages) {
+    Write-Host ''
+    Write-Host 'madCollection tools are installed, but Delphi 12.3 packages are missing.' -ForegroundColor Yellow
+    Write-Host '  Re-run the madCollection installer, enable "Delphi 12 Alexandria" / BDS 23, then compile madExcept*.dpk in the IDE.' -ForegroundColor Gray
+    Write-Host '  Until then, build uses source\madexcept-stub (no crash reports).' -ForegroundColor Gray
 }
 
 Write-Host ''
