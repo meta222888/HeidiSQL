@@ -1790,6 +1790,7 @@ object MainForm: TMainForm
       List = True
       ShowCaptions = True
       TabOrder = 1
+      Visible = False
       Wrapable = False
       object btnDonate: TToolButton
         Left = 0

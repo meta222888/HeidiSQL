@@ -2267,9 +2267,8 @@ begin
   SessionPaths := TStringList.Create;
   AppSettings.GetSessionPaths('', SessionPaths);
 
-  // Probably hide image
-  FHasDonatedDatabaseCheck := nbUnset;
-  ToolBarDonate.Visible := HasDonated(True) <> nbTrue;
+  // Hide PayPal donate toolbar in this fork
+  ToolBarDonate.Visible := False;
 
   // Call user statistics if checked in settings
   if AppSettings.ReadBool(asDoUsageStatistics) then begin
@@ -2841,14 +2840,6 @@ begin
 
   lblDataTop.Width := pnlDataTop.Width - tlbDataButtons.Width - 10;
   FixQueryTabCloseButtons;
-
-  // Right aligned button
-  // Do not set ToolBar.Align to alRight. See issue #1967
-  if ToolBarDonate.Visible then begin
-    //ToolBarDonate.Width := ToolBarDonate.Buttons[0].Width;
-    ToolBarDonate.Left := ControlBarMain.Width - ToolBarDonate.Width;
-    //ToolBarDonate.Buttons[0].Height := ToolBarMainButtons.Buttons[0].Height;
-  end;
 
 end;
 
