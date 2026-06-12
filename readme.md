@@ -37,29 +37,47 @@ HeidiSQL 是一款图形化数据库管理工具，支持 [MariaDB](http://www.m
 - 提问讨论：[官方论坛](https://www.heidisql.com/forum.php)
 - 缺陷反馈：[GitHub Issues](https://github.com/HeidiSQL/HeidiSQL/issues)
 
-## 编译
+## 开发环境（快速开始）
+
+### 一键脚本
+
+在仓库根目录用 PowerShell 执行：
+
+```powershell
+# 1. 检测工具链、同步 out\ 运行期 DLL
+.\scripts\setup-dev.ps1
+
+# 2. 编译（需已安装 Delphi 12.3 + madExcept）
+.\scripts\build.ps1
+
+# 3. 启动（优先 out\heidisql.exe，否则用已安装版本）
+.\scripts\run.ps1
+```
+
+在 Cursor / VS Code 中也可通过任务面板运行：**HeidiSQL: 初始化开发环境**、**HeidiSQL: 编译**、**HeidiSQL: 运行**。
+
+### 必需工具
+
+| 工具 | 路径 / 说明 |
+|------|-------------|
+| **RAD Studio 12.3** (Delphi) | 默认 `C:\Program Files (x86)\Embarcadero\Studio\23.0\` |
+| **madExcept** | 默认 `C:\Program Files (x86)\madCollection\` |
+| **HeidiSQL 运行期 DLL**（可选） | `winget install HeidiSQL.HeidiSQL`，由 `setup-dev.ps1` 同步到 `out\` |
+
+未安装 Delphi 时，`setup-dev.ps1` 会提示下载地址；`run.ps1` 仍可启动官方安装版用于对比测试。
+
+### 手动编译（官方流程）
 
 非 Windows 平台请查看官方 [`lazarus`](https://github.com/HeidiSQL/HeidiSQL/tree/lazarus) 分支。
 
-Windows 版本需要 **Delphi 12.1** 或更高版本。较旧的 Delphi 大概率无法编译；Lazarus 等免费编译器目前也无法编译 HeidiSQL。
+也可在 RAD Studio 中打开 `packages\Delphi12.3\heidisql.groupproj`，或使用官方 `build.php`（需 PHP）。
+
+Windows 版本需要 **Delphi 12.1** 或更高版本。较旧的 Delphi 大概率无法编译；Lazarus 等免费编译器目前无法编译本分支。
 
 1. 安装 Delphi 后，在 `components` 目录编译并安装 SynEdit、VirtualTreeView 的运行时与设计时包。
 2. 安装 [madExcept](http://madshi.net/madCollection.exe)。
-3. 编译资源文件（`*.rc`）：
-
-| 目录 | 文件 | 命令 |
-| ------ | ------ | ------ |
-| HeidiSQL/source/vcl-styles-utils | AwesomeFont.RC | brcc32 AwesomeFont.RC |
-| HeidiSQL/res | icon.rc | cgrc icon.rc |
-| HeidiSQL/res | icon-question.rc | brcc32 icon-question.rc |
-| HeidiSQL/res | version.rc | brcc32 version.rc |
-| HeidiSQL/res | manifest.rc | manifest.rc |
-| HeidiSQL/res | styles.rc | brcc32 styles.rc |
-| HeidiSQL/res | updater.rc | brcc32 updater.rc |
-
-> 若 `updater.rc` 和 `updater.exe` 不存在，可从 `updater64.rc` 和 `updater64.exe` 复制。
-
-4. 打开 `packages` 目录下的 HeidiSQL 工程并编译，输出在 `out\heidisql.exe`。
+3. 编译资源文件（`*.rc`），或执行 `php build.php`（官方 CI 脚本）。
+4. 输出在 `out\heidisql.exe`。
 
 ## 翻译贡献
 
