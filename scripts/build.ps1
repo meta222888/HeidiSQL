@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  编译 HeidiSQL（需已安装 Delphi 12.3 + madExcept）
+  Build HeidiSQL (Delphi 12.3 + madExcept)
 
 .EXAMPLE
   .\scripts\build.ps1
@@ -22,7 +22,7 @@ $HeidiProj = Join-Path $RepoRoot 'packages\Delphi12.3\heidisql.dproj'
 
 $DelphiBin = Get-HeidiDelphiBin -RepoRoot $RepoRoot
 if (-not $DelphiBin) {
-    Write-Error '未找到 Delphi。请安装到 D:\tools\Delphi 12.3 或设置环境变量 HEIDISQL_DELPHI_BIN。'
+    Write-Error 'Delphi not found. Install to D:\tools\Delphi 12.3 or set HEIDISQL_DELPHI_BIN.'
 }
 
 $DelphiRoot = Get-HeidiDelphiRoot -DelphiBin $DelphiBin
