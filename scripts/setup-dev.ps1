@@ -8,32 +8,32 @@
 $ErrorActionPreference = 'Stop'
 $RepoRoot = Split-Path $PSScriptRoot -Parent
 $OutDir = Join-Path $RepoRoot 'out'
-$Pf86 = [Environment]::GetFolderPath('ProgramFilesX86')
-$DelphiBin = Join-Path $Pf86 'Embarcadero\Studio\23.0\bin'
-$MadDir = Join-Path $Pf86 'madCollection'
+$PortableDir = 'D:\tools\HeidiSQL_12.18_64_Portable'
 $InstalledDir = Join-Path $env:LOCALAPPDATA 'Programs\HeidiSQL'
+
+. (Join-Path $PSScriptRoot 'delphi-env.ps1')
 
 function Write-Status {
     param([string]$Label, [bool]$Ok)
-    if ($Ok) {
-        Write-Host "OK   $Label"
-    } else {
-        Write-Host "MISS $Label"
-    }
+    if ($Ok) { Write-Host "OK   $Label" -ForegroundColor Green }
+    else { Write-Host "MISS $Label" -ForegroundColor Yellow }
 }
 
 Write-Host '=== HeidiSQL dev environment ===' -ForegroundColor Cyan
 Write-Host "Repo: $RepoRoot"
 Write-Host ''
 
-$hasDelphi = Test-Path (Join-Path $DelphiBin 'dcc64.exe')
-$hasMad = Test-Path (Join-Path $MadDir 'madExcept\Tools\madExceptPatch.exe')
-$hasBrcc = Test-Path (Join-Path $DelphiBin 'brcc32.exe')
+$DelphiBin = Get-HeidiDelphiBin -RepoRoot $RepoRoot
+$DelphiRoot = if ($DelphiBin) { Get-HeidiDelphiRoot -DelphiBin $DelphiBin } else { $null }
+$MadDir = Get-HeidiMadDir
+$hasBrcc = $DelphiBin -and (Test-Path (Join-Path $DelphiBin 'brcc32.exe'))
 $hasInstalled = Test-Path (Join-Path $InstalledDir 'heidisql.exe')
+$hasPortable = Test-Path (Join-Path $PortableDir 'heidisql.exe')
 
-Write-Status -Label "Delphi 12.3: $DelphiBin" -Ok $hasDelphi
-Write-Status -Label 'madExcept (madCollection)' -Ok $hasMad
+Write-Status -Label "Delphi: $(if ($DelphiRoot) { $DelphiRoot } else { 'not found' })" -Ok ($null -ne $DelphiBin)
+Write-Status -Label "madExcept: $(if ($MadDir) { $MadDir } else { 'not found' })" -Ok ($null -ne $MadDir)
 Write-Status -Label 'brcc32' -Ok $hasBrcc
+Write-Status -Label "Portable HeidiSQL: $PortableDir" -Ok $hasPortable
 Write-Status -Label "Installed HeidiSQL: $InstalledDir" -Ok $hasInstalled
 Write-Host ''
 
@@ -41,39 +41,46 @@ if (-not (Test-Path $OutDir)) {
     New-Item -ItemType Directory -Path $OutDir | Out-Null
 }
 
-if ($hasInstalled) {
-    Write-Host 'Syncing runtime files to out\ ...' -ForegroundColor Yellow
+$runtimeSrc = $null
+if ($hasPortable) { $runtimeSrc = $PortableDir }
+elseif ($hasInstalled) { $runtimeSrc = $InstalledDir }
+
+if ($runtimeSrc) {
+    Write-Host "Syncing runtime files from $runtimeSrc to out\ ..." -ForegroundColor Yellow
     $patterns = @('*.dll', '*.ini', 'plink*.exe', '*.txt', 'LICENSE*')
     foreach ($pat in $patterns) {
-        Get-ChildItem -Path $InstalledDir -Filter $pat -File -ErrorAction SilentlyContinue |
+        Get-ChildItem -Path $runtimeSrc -Filter $pat -File -ErrorAction SilentlyContinue |
             Copy-Item -Destination $OutDir -Force
     }
-    $pluginsSrc = Join-Path $InstalledDir 'plugins'
-    if (Test-Path $pluginsSrc) {
-        Copy-Item -Path $pluginsSrc -Destination (Join-Path $OutDir 'plugins') -Recurse -Force
+    foreach ($sub in @('plugins', 'plugins64', 'locale', 'Snippets')) {
+        $src = Join-Path $runtimeSrc $sub
+        if (Test-Path $src) {
+            Copy-Item -Path $src -Destination (Join-Path $OutDir $sub) -Recurse -Force
+        }
     }
     Write-Host 'Runtime files synced.' -ForegroundColor Green
 } else {
-    Write-Host 'No installed HeidiSQL found. Run: winget install HeidiSQL.HeidiSQL' -ForegroundColor Yellow
+    Write-Host 'No portable/installed HeidiSQL found for runtime DLL sync.' -ForegroundColor Yellow
+    Write-Host '  Optional: extract D:\tools\HeidiSQL_12.18_64_Portable or winget install HeidiSQL.HeidiSQL' -ForegroundColor Gray
 }
 
 New-Item -ItemType Directory -Path (Join-Path $RepoRoot 'build\Win64') -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $RepoRoot 'build\Win32') -Force | Out-Null
 
-if (-not $hasDelphi) {
+if (-not $DelphiBin) {
     Write-Host ''
-    Write-Host 'Delphi not found. Install RAD Studio 12.1+ and madExcept, then rerun.' -ForegroundColor Red
-    Write-Host '  https://www.embarcadero.com/products/delphi' -ForegroundColor Gray
-    Write-Host '  http://madshi.net/madCollection.exe' -ForegroundColor Gray
-    Write-Host ''
-    Write-Host 'Then run: .\scripts\build.ps1' -ForegroundColor Yellow
-    exit 1
+    Write-Host 'Delphi not found. Set HEIDISQL_DELPHI_BIN or install to D:\tools\Delphi 12.3' -ForegroundColor Red
+    return 1
 }
 
-if (-not $hasMad) {
-    Write-Host 'Warning: madExcept not found. Release builds may fail.' -ForegroundColor Yellow
+Ensure-HeidiDelphiRsVars -RepoRoot $RepoRoot -DelphiRoot $DelphiRoot | Out-Null
+Write-Host "Generated scripts\rsvars-local.bat for: $DelphiRoot" -ForegroundColor Cyan
+
+if (-not $MadDir) {
+    Write-Host ''
+    Write-Host 'madExcept not found; build will use source\madexcept-stub (dev builds only).' -ForegroundColor Yellow
 }
 
 Write-Host ''
 Write-Host 'Ready. Next: .\scripts\build.ps1' -ForegroundColor Green
-exit 0
+return 0

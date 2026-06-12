@@ -16,39 +16,22 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $RepoRoot = Split-Path $PSScriptRoot -Parent
-$Pf86 = [Environment]::GetFolderPath('ProgramFilesX86')
-$RsVars = Join-Path $Pf86 'Embarcadero\Studio\23.0\bin\rsvars.bat'
-$GroupProj = Join-Path $RepoRoot 'packages\Delphi12.3\heidisql.groupproj'
+$HeidiProj = Join-Path $RepoRoot 'packages\Delphi12.3\heidisql.dproj'
 
-if (-not (Test-Path $RsVars)) {
-    Write-Error "未找到 Delphi。请先运行 .\scripts\setup-dev.ps1 并按提示安装 RAD Studio 12.3。"
+. (Join-Path $PSScriptRoot 'delphi-env.ps1')
+
+$DelphiBin = Get-HeidiDelphiBin -RepoRoot $RepoRoot
+if (-not $DelphiBin) {
+    Write-Error '未找到 Delphi。请安装到 D:\tools\Delphi 12.3 或设置环境变量 HEIDISQL_DELPHI_BIN。'
 }
 
-& (Join-Path $RepoRoot 'scripts\setup-dev.ps1')
-if ($LASTEXITCODE -ne 0 -and -not (Test-Path $RsVars)) { exit 1 }
+$DelphiRoot = Get-HeidiDelphiRoot -DelphiBin $DelphiBin
+$RsVars = Ensure-HeidiDelphiRsVars -RepoRoot $RepoRoot -DelphiRoot $DelphiRoot
 
-Write-Host "=== 编译 HeidiSQL ($Config / $Platform) ===" -ForegroundColor Cyan
+$setupCode = & (Join-Path $RepoRoot 'scripts\setup-dev.ps1')
+if ($setupCode -ne 0) { exit $setupCode }
 
-$buildCmd = @"
-call "$RsVars"
-cd /d "$RepoRoot\packages\Delphi12.3"
-msbuild "$GroupProj" /t:Build /p:Config=$Config /p:Platform=$Platform /verbosity:minimal
-"@
+& (Join-Path $RepoRoot 'scripts\compile-resources.ps1')
 
-$bat = Join-Path $env:TEMP 'heidisql-build.cmd'
-Set-Content -Path $bat -Value $buildCmd -Encoding ASCII
-cmd /c $bat
-$code = $LASTEXITCODE
-Remove-Item $bat -Force -ErrorAction SilentlyContinue
-
-if ($code -ne 0) {
-    Write-Error "编译失败 (exit $code)。可在 RAD Studio 中打开 packages\Delphi12.3\heidisql.groupproj 查看详细错误。"
-}
-
-$exe = Join-Path $RepoRoot 'out\heidisql.exe'
-if (Test-Path $exe) {
-    Write-Host "编译成功: $exe" -ForegroundColor Green
-} else {
-    Write-Host '编译完成但未找到 out\heidisql.exe，请检查 MSBuild 输出。' -ForegroundColor Yellow
-}
-exit $code
+& (Join-Path $RepoRoot 'scripts\build-dcc.ps1') -Config $Config -Platform $Platform
+exit $LASTEXITCODE

@@ -1,0 +1,11 @@
+@ECHO OFF
+SET "BDS=D:\tools\Delphi 12.3"
+SET "BDSINCLUDE=D:\tools\Delphi 12.3\include"
+SET "BDSCOMMONDIR=C:\ProgramData\Embarcadero\Studio\23.0"
+SET "FrameworkDir=C:\Windows\Microsoft.NET\Framework\v4.0.30319"
+SET "FrameworkVersion=v4.5"
+SET "FrameworkSDKDir="
+SET "PATH=%FrameworkDir%;%FrameworkSDKDir%;D:\tools\Delphi 12.3\bin;D:\tools\Delphi 12.3\bin64;D:\tools\Delphi 12.3\cmake;%PATH%"
+SET "LANGDIR=EN"
+SET "PLATFORM="
+SET "PlatformSDK="
