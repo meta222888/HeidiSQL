@@ -4108,7 +4108,7 @@ begin
   InitSetting(asFieldNullBackground,              'Field_NullBackground',                  clNone);
   InitSetting(asRowBackgroundEven,                'RowBackgroundEven',                     clNone);
   InitSetting(asRowBackgroundOdd,                 'RowBackgroundOdd',                      clNone);
-  InitSetting(asGroupTreeObjects,                 'GroupTreeObjects',                      0, False);
+  InitSetting(asGroupTreeObjects,                 'GroupTreeObjects',                      0, True);
   InitSetting(asDisplayObjectSizeColumn,          'DisplayObjectSizeColumn',               0, True);
   InitSetting(asDisplayLogPanel,                  'DisplayLogPanel',                       0, True);
   InitSetting(asDisplayTreeFilters,               'DisplayTreeFilters',                    0, True);

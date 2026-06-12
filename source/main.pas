@@ -1456,6 +1456,11 @@ uses
 
 {$R *.dfm}
 
+const
+  DBTreeGroupedObjectTypes: array[0..4] of TListNodeType =
+    (lntView, lntProcedure, lntFunction, lntTrigger, lntEvent);
+  DBTreeGroupedObjectTypeCount = Length(DBTreeGroupedObjectTypes);
+
 
 procedure TMainForm.ShowStatusMsg(Msg: String=''; PanelNr: Integer=6);
 var
@@ -9863,18 +9868,16 @@ begin
       end;
     // DB node expanding
     lntDb: begin
-        if actGroupObjects.Checked then begin
-          // Just tables, views, etc.
-          ChildCount := 6;
-        end else begin
-          ShowStatusMsg(_('Reading objects ...'));
-          Screen.Cursor := crHourglass;
-          try
-            ChildCount := DBObj.Connection.GetDBObjects(DBObj.Connection.AllDatabases[Node.Index]).Count;
-          finally
-            ShowStatusMsg;
-            Screen.Cursor := crDefault;
-          end;
+        ShowStatusMsg(_('Reading objects ...'));
+        Screen.Cursor := crHourglass;
+        try
+          if actGroupObjects.Checked then
+            ChildCount := DBObj.Connection.GetDBObjects(DBObj.Database, False, lntTable).Count + DBTreeGroupedObjectTypeCount
+          else
+            ChildCount := DBObj.Connection.GetDBObjects(DBObj.Database).Count;
+        finally
+          ShowStatusMsg;
+          Screen.Cursor := crDefault;
         end;
       end;
     lntGroup: begin
@@ -9918,18 +9921,25 @@ begin
       end;
       lntDb: begin
         if actGroupObjects.Checked then begin
-          Item^ := TDBObject.Create(ParentObj.Connection);
-          Item.NodeType := lntGroup;
-          case Node.Index of
-            0: begin Item.GroupType := lntTable; Item.Name := _('Tables'); end;
-            1: begin Item.GroupType := lntView; Item.Name := _('Views'); end;
-            2: begin Item.GroupType := lntProcedure; Item.Name := _('Procedures'); end;
-            3: begin Item.GroupType := lntFunction; Item.Name := _('Functions'); end;
-            4: begin Item.GroupType := lntTrigger; Item.Name := _('Triggers'); end;
-            5: begin Item.GroupType := lntEvent; Item.Name := _('Events'); end;
+          DBObjects := ParentObj.Connection.GetDBObjects(ParentObj.Database, False, lntTable);
+          if Node.Index < Cardinal(DBObjects.Count) then begin
+            Item^ := DBObjects[Node.Index];
+            if (GetParentFormOrFrame(Sender) is TfrmSelectDBObject) and (Item.NodeType = lntTable) then
+              Include(InitialStates, ivsHasChildren);
+          end else begin
+            Item^ := TDBObject.Create(ParentObj.Connection);
+            Item.NodeType := lntGroup;
+            Item.GroupType := DBTreeGroupedObjectTypes[Node.Index - DBObjects.Count];
+            Item.Database := ParentObj.Database;
+            case Item.GroupType of
+              lntView: Item.Name := _('Views');
+              lntProcedure: Item.Name := _('Procedures');
+              lntFunction: Item.Name := _('Functions');
+              lntTrigger: Item.Name := _('Triggers');
+              lntEvent: Item.Name := _('Events');
+            end;
+            Include(InitialStates, ivsHasChildren);
           end;
-          Item.Database := ParentObj.Database;
-          InitialStates := InitialStates + [ivsHasChildren];
         end else begin
           DBObjects := ParentObj.Connection.GetDBObjects(ParentObj.Database);
           Item^ := DBObjects[Node.Index];
