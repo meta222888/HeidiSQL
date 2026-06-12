@@ -2767,7 +2767,8 @@ begin
     if NetLib <> '' then
       ConnStr := ConnStr + 'Network Library='+NetLib+';';
     ConnStr := ConnStr + 'Data Source='+DataSource+';'+
-      'Application Name='+AppName+';';
+      'Application Name='+AppName+';'+
+      'Locale Identifier='+IntToStr(GetUserDefaultLCID)+';';
     FAdoHandle.ConnectionString := ConnStr;
     if IsOleDbDriver then begin
       // Issue #423: MSOLEDBSQL compatibility with new column types
@@ -9035,36 +9036,75 @@ begin
 end;
 
 
+function LocaleAnsiCodePage: UINT;
+var
+  Buffer: array[0..15] of Char;
+begin
+  // LOCALE_IDEFAULTANSICODEPAGE stays 936 for zh-CN even when the system "UTF-8" beta sets GetACP to 65001.
+  if GetLocaleInfo(LOCALE_USER_DEFAULT, LOCALE_IDEFAULTANSICODEPAGE, Buffer, Length(Buffer)) > 0 then
+    Result := StrToIntDef(String(Buffer), 0)
+  else
+    Result := 0;
+  if Result = 0 then
+    Result := GetACP;
+end;
+
+
+function AnsiToUnicode(const AnsiStr: AnsiString; CodePage: UINT): String;
+var
+  WideLen: Integer;
+begin
+  if Length(AnsiStr) = 0 then
+    Exit('');
+  WideLen := MultiByteToWideChar(CodePage, 0, PAnsiChar(AnsiStr), Length(AnsiStr), nil, 0);
+  SetLength(Result, WideLen);
+  if WideLen > 0 then
+    MultiByteToWideChar(CodePage, 0, PAnsiChar(AnsiStr), Length(AnsiStr), PWideChar(Result), WideLen);
+end;
+
+
+function TryDecodeUtf8(const AnsiStr: AnsiString; out Unicode: String): Boolean;
+const
+  UTF8CP = 65001;
+var
+  WideLen: Integer;
+begin
+  Result := False;
+  Unicode := '';
+  if Length(AnsiStr) = 0 then begin
+    Result := True;
+    Exit;
+  end;
+  WideLen := MultiByteToWideChar(UTF8CP, MB_ERR_INVALID_CHARS, PAnsiChar(AnsiStr), Length(AnsiStr), nil, 0);
+  if WideLen = 0 then
+    Exit;
+  SetLength(Unicode, WideLen);
+  Result := MultiByteToWideChar(UTF8CP, MB_ERR_INVALID_CHARS, PAnsiChar(AnsiStr), Length(AnsiStr), PWideChar(Unicode), WideLen) > 0;
+end;
+
+
+function AnsiToUnicodeAuto(const AnsiStr: AnsiString): String;
+begin
+  if TryDecodeUtf8(AnsiStr, Result) then
+    Exit;
+  Result := AnsiToUnicode(AnsiStr, LocaleAnsiCodePage);
+end;
+
+
 function AdoVariantToString(const V: OleVariant): String;
 var
   VarT: Word;
-  AnsiStr: AnsiString;
-  WideLen: Integer;
-  CodePage: UINT;
 begin
   if VarIsNull(V) or VarIsEmpty(V) then begin
     Result := '';
     Exit;
   end;
-  VarT := VarType(V);
+  VarT := VarType(V) and varTypeMask;
   case VarT of
-    varOleStr:
-      Result := WideString(V);
+    varOleStr, varUString:
+      Result := String(V);
     varString:
-      begin
-        AnsiStr := AnsiString(V);
-        if Length(AnsiStr) = 0 then
-          Result := ''
-        else begin
-          // Use the active ANSI code page. TEncoding.Default may be UTF-8 on Windows 10+,
-          // which breaks SQL Server VARCHAR data stored in a DBCS code page (e.g. GBK).
-          CodePage := GetACP;
-          WideLen := MultiByteToWideChar(CodePage, 0, PAnsiChar(AnsiStr), Length(AnsiStr), nil, 0);
-          SetLength(Result, WideLen);
-          if WideLen > 0 then
-            MultiByteToWideChar(CodePage, 0, PAnsiChar(AnsiStr), Length(AnsiStr), PWideChar(Result), WideLen);
-        end;
-      end;
+      Result := AnsiToUnicodeAuto(AnsiString(V));
   else
     Result := VarToStr(V);
   end;
@@ -9075,13 +9115,19 @@ function AdoFieldValueToString(Field: TField; AdoQuery: TAdoQuery): String;
 var
   V: OleVariant;
 begin
-  if (AdoQuery <> nil) and (AdoQuery.Recordset <> nil) then begin
-    V := AdoQuery.Recordset.Fields[Field.Index].Value;
-    Result := AdoVariantToString(V);
-  end else if Field.DataType in [ftWideString, ftWideMemo, ftFixedWideChar] then
-    Result := Field.AsWideString
+  if Field.IsNull then begin
+    Result := '';
+    Exit;
+  end;
+  if Field.DataType in [ftWideString, ftWideMemo, ftFixedWideChar] then begin
+    Result := Field.AsWideString;
+    Exit;
+  end;
+  if (AdoQuery <> nil) and (AdoQuery.Recordset <> nil) then
+    V := AdoQuery.Recordset.Fields[Field.Index].Value
   else
-    Result := AdoVariantToString(Field.Value);
+    V := Field.Value;
+  Result := AdoVariantToString(V);
 end;
 
 
