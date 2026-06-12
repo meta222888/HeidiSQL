@@ -219,6 +219,7 @@ type
     FPopupCiphers: TPopupMenu;
     FButtonAnimationStep: Integer;
     FLastSelectedNetTypeGroup: TNetTypeGroup;
+    FLastSelectedNetType: TNetType;
     function GetSelectedNetType: TNetType;
     procedure SetSelectedNetType(Value: TNetType);
     procedure RefreshSessions(ParentNode: PVirtualNode);
@@ -1033,6 +1034,7 @@ begin
 
     SelectedNetType := Sess.NetType;
     FLastSelectedNetTypeGroup := Sess.NetTypeGroup;
+    FLastSelectedNetType := Sess.NetType;
     editHost.Text := Sess.Hostname;
     editUsername.Text := Sess.Username;
     editPassword.Text := Sess.Password;
@@ -1433,6 +1435,9 @@ begin
     if not editHost.Modified then
       editHost.Text := Params.DefaultHost;
     chkSSHActive.Checked := Params.DefaultSshActive;
+  end else if (not editPort.Modified) and (SelectedNetType = ntMSSQL_TCPIP) and (FLastSelectedNetType <> ntMSSQL_TCPIP) then begin
+    // Switching from another MSSQL net type to TCP/IP should preset the default port
+    updownPort.Position := Params.DefaultPort;
   end;
 
   // Populate libraries combobox. Required on each net group change, and also between
@@ -1445,6 +1450,7 @@ begin
   end;
 
   FLastSelectedNetTypeGroup := Params.NetTypeGroup;
+  FLastSelectedNetType := SelectedNetType;
   FreeAndNil(Params);
   Modification(Sender);
 end;

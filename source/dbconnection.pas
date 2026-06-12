@@ -1895,7 +1895,11 @@ begin
       else
         Result := 3306;
     end;
-    ngMSSQL: Result := 0; // => autodetection by driver (previously 1433)
+    ngMSSQL:
+      if NetType = ntMSSQL_TCPIP then
+        Result := 1433
+      else
+        Result := 0;
     ngPgSQL: Result := 5432;
     ngInterbase: Result := 3050;
     else Result := 0;
@@ -2695,11 +2699,11 @@ end;
 
 procedure TAdoDBConnection.SetActive(Value: Boolean);
 var
-  Error, NetLib, DataSource, QuotedPassword, ServerVersion, ErrorHint: String;
+  Error, NetLib, DataSource, QuotedPassword, ServerVersion, ErrorHint, ConnStr: String;
   FinalHost: String;
   rx: TRegExpr;
   FinalPort, i: Integer;
-  IsOldProvider: Boolean;
+  IsOldProvider, IsOleDbDriver: Boolean;
 begin
   if Value then begin
     DoBeforeConnect;
@@ -2721,6 +2725,7 @@ begin
     end;
 
     IsOldProvider := Parameters.LibraryOrProvider = 'SQLOLEDB';
+    IsOleDbDriver := Parameters.LibraryOrProvider.StartsWith('MSOLEDBSQL', true);
     if IsOldProvider and (not WarningShownOldOleProvider) then begin
       MessageDialog(
         f_('Security issue: Using %s %s with insecure %s.',
@@ -2731,13 +2736,17 @@ begin
       WarningShownOldOleProvider := True;
     end;
 
+    // Network Library is only supported by the legacy SQLOLEDB provider.
+    // MSOLEDBSQL rejects it and fails with a parameter type / conflict error.
     NetLib := '';
-    case Parameters.NetType of
-      ntMSSQL_NamedPipe: NetLib := 'DBNMPNTW';
-      ntMSSQL_TCPIP: NetLib := 'DBMSSOCN';
-      ntMSSQL_SPX: NetLib := 'DBMSSPXN';
-      ntMSSQL_VINES: NetLib := 'DBMSVINN';
-      ntMSSQL_RPC: NetLib := 'DBMSRPCN';
+    if not IsOleDbDriver then begin
+      case Parameters.NetType of
+        ntMSSQL_NamedPipe: NetLib := 'DBNMPNTW';
+        ntMSSQL_TCPIP: NetLib := 'DBMSSOCN';
+        ntMSSQL_SPX: NetLib := 'DBMSSPXN';
+        ntMSSQL_VINES: NetLib := 'DBMSVINN';
+        ntMSSQL_RPC: NetLib := 'DBMSRPCN';
+      end;
     end;
 
     DataSource := FinalHost;
@@ -2751,15 +2760,16 @@ begin
     else
       QuotedPassword := '"'+Parameters.Password+'"';
 
-    FAdoHandle.ConnectionString := 'Provider='+Parameters.LibraryOrProvider+';'+
+    ConnStr := 'Provider='+Parameters.LibraryOrProvider+';'+
       'Password='+QuotedPassword+';'+
       'Persist Security Info=True;'+
-      'User ID='+Parameters.Username+';'+
-      'Network Library='+NetLib+';'+
-      'Data Source='+DataSource+';'+
-      'Application Name='+AppName+';'
-      ;
-    if Parameters.LibraryOrProvider.StartsWith('MSOLEDBSQL', true) then begin
+      'User ID='+Parameters.Username+';';
+    if NetLib <> '' then
+      ConnStr := ConnStr + 'Network Library='+NetLib+';';
+    ConnStr := ConnStr + 'Data Source='+DataSource+';'+
+      'Application Name='+AppName+';';
+    FAdoHandle.ConnectionString := ConnStr;
+    if IsOleDbDriver then begin
       // Issue #423: MSOLEDBSQL compatibility with new column types
       // See https://docs.microsoft.com/en-us/sql/connect/oledb/applications/using-ado-with-oledb-driver-for-sql-server?view=sql-server-2017
       // Do not use with old driver, see https://www.heidisql.com/forum.php?t=35208
