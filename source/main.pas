@@ -257,6 +257,7 @@ type
     menuSupportForum: TMenuItem;
     actExportData: TAction;
     actExecuteCurrentQuery: TAction;
+    actExecuteQuerySmart: TAction;
     actDataPreview: TAction;
     actInsertFiles: TAction;
     actExportTables: TAction;
@@ -1392,6 +1393,7 @@ type
     procedure SetupSynEditor(Editor: TSynMemo);
     function AnyGridEnsureFullRow(Grid: TVirtualStringTree; Node: PVirtualNode): Boolean;
     procedure DataGridEnsureFullRows(Grid: TVirtualStringTree; SelectedOnly: Boolean);
+    procedure CopySelectedGridRowsToClipboard(Grid: TVirtualStringTree);
     property DataGridSortItems: TSortItems read FDataGridSortItems write FDataGridSortItems;
     function GetEncodingByName(Name: String): TEncoding;
     function GetEncodingName(Encoding: TEncoding): String;
@@ -3235,6 +3237,14 @@ begin
   if Sender = actExecuteSelection then begin
     Batch.SQL := Tab.Memo.SelText;
     Tab.LeftOffsetInMemo := Tab.Memo.SelStart;
+  end else if Sender = actExecuteQuerySmart then begin
+    if Tab.Memo.SelAvail then begin
+      Batch.SQL := Tab.Memo.SelText;
+      Tab.LeftOffsetInMemo := Tab.Memo.SelStart;
+    end else begin
+      Batch.SQL := Tab.Memo.Text;
+      Tab.LeftOffsetInMemo := 0;
+    end;
   end else if Sender = actExecuteCurrentQuery then begin
     Batch.SQL := GetCurrentQuery(Tab);
   end else if Sender = actExplainCurrentQuery then begin
@@ -6703,6 +6713,7 @@ begin
   HasConnection := Conn <> nil;
   actExecuteQuery.Enabled := HasConnection and InQueryTab and NotEmpty and (not Tab.QueryRunning);
   actExecuteSelection.Enabled := HasConnection and InQueryTab and HasSelection and (not Tab.QueryRunning);
+  actExecuteQuerySmart.Enabled := actExecuteQuery.Enabled;
   actExecuteCurrentQuery.Enabled := actExecuteQuery.Enabled;
   actExplainCurrentQuery.Enabled := actExecuteQuery.Enabled and (Conn.Parameters.NetTypeGroup in [ngMySQL, ngPgSQL, ngSQLite]);
   actSaveSQLAs.Enabled := InQueryTab and NotEmpty;
@@ -12061,6 +12072,36 @@ begin
 end;
 
 
+procedure TMainForm.CopySelectedGridRowsToClipboard(Grid: TVirtualStringTree);
+var
+  Node: PVirtualNode;
+  Col: TColumnIndex;
+  Line, Body, Data: String;
+  Separator: String;
+  IsFirstCol: Boolean;
+begin
+  Separator := #9;
+  Body := '';
+  Node := Grid.GetFirstSelected;
+  while Assigned(Node) do begin
+    IsFirstCol := True;
+    Line := '';
+    Col := Grid.Header.Columns.GetFirstVisibleColumn(True);
+    while Col > NoColumn do begin
+      Data := Grid.Text[Node, Col];
+      if not IsFirstCol then
+        Line := Line + Separator;
+      IsFirstCol := False;
+      Line := Line + Data;
+      Col := Grid.Header.Columns.GetNextVisibleColumn(Col);
+    end;
+    Body := Body + Line + SLineBreak;
+    Node := Grid.GetNextSelected(Node);
+  end;
+  Clipboard.TryAsText := Body;
+end;
+
+
 procedure TMainForm.actCopyGridNodesExecute(Sender: TObject);
 var
   SenderControl: TComponent;
@@ -12113,6 +12154,25 @@ begin
 
   Body := '';
   NodesCopied := 0;
+  if Grid.SelectedCount > 0 then begin
+    Node := Grid.GetFirstSelected;
+    while Assigned(Node) do begin
+      IsFirstCol := True;
+      Line := '';
+      Col := Grid.Header.Columns.GetFirstVisibleColumn(True);
+      while Col > NoColumn do begin
+        Data := Grid.Text[Node, Col];
+        if not IsFirstCol then
+          Line := Line + Separator;
+        IsFirstCol := False;
+        Line := Line + Data;
+        Col := Grid.Header.Columns.GetNextVisibleColumn(Col);
+      end;
+      Body := Body + Line + Terminator;
+      Inc(NodesCopied);
+      Node := Grid.GetNextSelected(Node);
+    end;
+  end else begin
   Node := Grid.GetFirstInitialized;
   while Assigned(Node) do begin
     if Grid.IsVisible[Node] then begin
@@ -12144,6 +12204,7 @@ begin
       Inc(NodesCopied);
     end;
     Node := Grid.GetNextInitialized(Node);
+  end;
   end;
 
   Clipboard.TryAsText := Header + Body;
@@ -12208,6 +12269,8 @@ begin
             ExportDialog.Grid := Grid;
             ExportDialog.btnOK.Click;
             ExportDialog.Free;
+          end else if Grid.SelectedCount > 1 then begin
+            CopySelectedGridRowsToClipboard(Grid);
           end else begin
             // Handle NULL values in grids, see issue #3171
             AnyGridEnsureFullRow(Grid, Grid.FocusedNode);

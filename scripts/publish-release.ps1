@@ -6,8 +6,8 @@
   .\scripts\publish-release.ps1 -Version 12.18.1
 #>
 param(
-    [string]$Version = '12.18.1',
-    [string]$Tag = 'v12.18.1'
+    [string]$Version = '13.0.0.1',
+    [string]$Tag = 'v13.0.0.1'
 )
 
 $ErrorActionPreference = 'Stop'

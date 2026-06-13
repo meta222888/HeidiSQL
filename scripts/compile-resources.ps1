@@ -20,7 +20,7 @@ Write-Host '=== Compile HeidiSQL resources ===' -ForegroundColor Cyan
 $versionRcPath = Join-Path $RepoRoot 'res\version.rc'
 $versionText = [System.IO.File]::ReadAllText($versionRcPath)
 $versionText = $versionText.Replace('%APPNAME%', 'HeidiSQL')
-$versionText = $versionText.Replace('%APPVER%', '12.18.0.0 64 Bit')
+$versionText = $versionText.Replace('%APPVER%', '13.0.0.1 64 Bit')
 $versionTmp = Join-Path $env:TEMP 'heidisql-version.rc'
 [System.IO.File]::WriteAllText($versionTmp, $versionText, [System.Text.Encoding]::Default)
 

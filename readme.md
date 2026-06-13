@@ -6,7 +6,7 @@
 
 HeidiSQL 是一款图形化数据库管理工具，支持 [MariaDB](http://www.mariadb.org/)、[MySQL](http://www.mysql.com/)、[Microsoft SQL Server](http://www.microsoft.com/sql/)、[PostgreSQL](http://www.postgresql.org/)、[SQLite](https://www.sqlite.org/)、[Interbase](https://www.embarcadero.com/de/products/interbase) 和 [Firebird](https://firebirdsql.org/)。你可以浏览和编辑数据、管理表/视图/存储过程/触发器/计划事件，并将结构或数据导出到 SQL 文件、剪贴板或其他服务器。
 
-本仓库为 [meta222888/HeidiSQL](https://github.com/meta222888/HeidiSQL) fork，在官方 **12.18** 基础上针对 **SQL Server** 与 **中文环境** 做了修复与改进。
+本仓库为 [meta222888/HeidiSQL](https://github.com/meta222888/HeidiSQL) fork，在官方 **12.18** 基础上针对 **SQL Server** 与 **中文环境** 做了修复与改进。当前版本 **13.0.0.1**。
 
 ## 下载
 
@@ -47,6 +47,12 @@ HeidiSQL 是一款图形化数据库管理工具，支持 [MariaDB](http://www.m
 - **视图、存储过程、函数、触发器、事件** 归入可展开的子文件夹
 
 默认开启 `GroupTreeObjects`。
+
+### 快捷键与查询结果（13.0.0.1）
+
+- 执行 SQL：**F5**、**Ctrl+F5**、**Ctrl+Shift+F5**（与 SSMS 等工具一致）
+- **Ctrl+E**：有选中文本时执行选中部分，否则执行全部
+- 查询结果网格支持多行选择，**Ctrl+C** 可复制多行（制表符分隔）
 
 ### 集成官方中文语言包
 

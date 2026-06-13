@@ -1489,7 +1489,7 @@ object MainForm: TMainForm
             TreeOptions.AutoOptions = [toAutoDropExpand, toAutoScroll, toAutoScrollOnExpand, toAutoTristateTracking, toAutoDeleteMovedNodes, toAutoChangeScale]
             TreeOptions.MiscOptions = [toAcceptOLEDrop, toEditable, toFullRepaintOnResize, toGridExtensions, toInitOnSave, toWheelPanning, toEditOnClick, toEditOnDblClick]
             TreeOptions.PaintOptions = [toShowButtons, toShowDropmark, toShowHorzGridLines, toShowVertGridLines, toThemeAware, toUseBlendedImages, toAlwaysHideSelection]
-            TreeOptions.SelectionOptions = [toExtendedFocus, toMultiSelect, toRightClickSelect]
+            TreeOptions.SelectionOptions = [toExtendedFocus, toFullRowSelect, toMultiSelect, toRightClickSelect]
             Visible = False
             WantTabs = True
             OnAdvancedHeaderDraw = AnyGridAdvancedHeaderDraw
@@ -2298,7 +2298,7 @@ object MainForm: TMainForm
       Hint = 'Execute SQL...|Execute SQL-query/queries...'
       ImageIndex = 57
       ImageName = 'icons8-play'
-      ShortCut = 120
+      ShortCut = 116
       OnExecute = actExecuteQueryExecute
     end
     object actExecuteSelection: TAction
@@ -2308,7 +2308,7 @@ object MainForm: TMainForm
       Hint = 'Execute selected SQL...|Execute selected SQL-query/queries...'
       ImageIndex = 104
       ImageName = 'icons8-play-selected'
-      ShortCut = 16504
+      ShortCut = 16500
       OnExecute = actExecuteQueryExecute
     end
     object actExecuteCurrentQuery: TAction
@@ -2318,7 +2318,19 @@ object MainForm: TMainForm
       Hint = 'Run current query|Run currently focused SQL query'
       ImageIndex = 105
       ImageName = 'icons8-play-cropped'
-      ShortCut = 24696
+      ShortCut = 24692
+      OnExecute = actExecuteQueryExecute
+    end
+    object actExecuteQuerySmart: TAction
+      Category = 'SQL'
+      Caption = 'Run selection or all'
+      Enabled = False
+      Hint = 
+        'Execute selected SQL or all|Execute selected SQL if any is select' +
+        'ed, otherwise execute all SQL in the editor'
+      ImageIndex = 57
+      ImageName = 'icons8-play'
+      ShortCut = 16453
       OnExecute = actExecuteQueryExecute
     end
     object actExplainCurrentQuery: TAction
@@ -2504,7 +2516,7 @@ object MainForm: TMainForm
       Hint = 'Refresh'
       ImageIndex = 0
       ImageName = 'icons8-circular-arrow-100'
-      ShortCut = 116
+      ShortCut = 120
       OnExecute = actRefreshExecute
     end
     object actFullRefresh: TAction
@@ -2516,7 +2528,7 @@ object MainForm: TMainForm
         '!'
       ImageIndex = 184
       ImageName = 'icons8-circular-arrow-violet'
-      ShortCut = 8308
+      ShortCut = 16504
       OnExecute = actFullRefreshExecute
     end
     object actImportCSV: TAction
@@ -2762,7 +2774,7 @@ object MainForm: TMainForm
       Caption = 'Apply filter'
       ImageIndex = 55
       ImageName = 'icons8-checked'
-      ShortCut = 120
+      ShortCut = 8312
       OnExecute = actApplyFilterExecute
     end
     object actRemoveFilter: TAction
@@ -3087,7 +3099,7 @@ object MainForm: TMainForm
     object actGotoFilter: TAction
       Category = 'Various'
       Caption = 'Table filter'
-      ShortCut = 16453
+      ShortCut = 24645
       OnExecute = actGotoFilterExecute
     end
     object actGotoTab1: TAction

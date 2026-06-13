@@ -4,7 +4,7 @@
   Package out\ into a portable zip for GitHub release.
 #>
 param(
-    [string]$Version = '12.18.1'
+    [string]$Version = '13.0.0.1'
 )
 
 $ErrorActionPreference = 'Stop'
